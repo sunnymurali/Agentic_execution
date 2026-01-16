@@ -1,0 +1,26 @@
+# Kafka
+kafka-python>=2.0.2
+
+# FastAPI
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+
+# Document Processing
+pymupdf4llm>=0.0.5
+pypdf>=3.0.0
+
+# LangChain (1.x for create_agent and middleware support)
+langchain>=1.0.0
+langchain-openai>=0.3.0
+langchain-text-splitters>=0.3.0
+langchain-qdrant>=0.2.0
+
+# LangGraph
+langgraph>=0.2.0
+
+# Vector Store
+qdrant-client>=1.9.0
+
+# Azure OpenAI
+openai>=1.0.0
