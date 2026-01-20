@@ -13,6 +13,7 @@ sys.path.insert(0, ".")
 
 from app.services.process_service import ProcessService
 from app.services.process_service_v2 import ProcessServiceV2
+from app.services.process_service_v3 import ProcessServiceV3
 from app.services.vector_store_service import QdrantVectorStoreService
 from app.core.vector_store import (
     get_qdrant_client,
@@ -83,16 +84,28 @@ def get_process_service_v2(vector_store: QdrantVectorStoreService) -> ProcessSer
     return ProcessServiceV2(vector_store)
 
 
+def get_process_service_v3(
+    retrieval_host: str = "localhost",
+    retrieval_port: int = 50051
+) -> ProcessServiceV3:
+    """Initialize the V3 process service (gRPC retrieval)"""
+    return ProcessServiceV3(
+        retrieval_host=retrieval_host,
+        retrieval_port=retrieval_port
+    )
+
+
 def process_workflow_message(
     message: dict,
     process_service: ProcessService,
-    process_service_v2: ProcessServiceV2
+    process_service_v2: ProcessServiceV2,
+    process_service_v3: ProcessServiceV3
 ) -> dict:
     """
     Process a workflow message and return results.
-    Routes to V1 or V2 processor based on 'processor_type' field.
+    Routes to V1, V2, or V3 processor based on 'processor_type' field.
 
-    processor_type: "v1" (default) or "v2"
+    processor_type: "v1" (default), "v2", or "v3"
     """
 
     workflow_id = message.get("workflow_id", "unknown")
@@ -160,6 +173,35 @@ def process_workflow_message(
             enable_summarization=message.get("enable_summarization", False),
             response_format=message.get("response_format")
         )
+
+    elif processor_type == "v3":
+        # V3 processor - uses LangGraph with gRPC retrieval, requires nodes/edges
+        nodes = message.get("nodes", [])
+        edges = message.get("edges", [])
+        start_node = message.get("start_node", "")
+
+        if not nodes:
+            return {
+                "workflow_id": workflow_id,
+                "document_id": document_id,
+                "status": "failed",
+                "message": "Missing required field for V3: nodes",
+                "final_output": None,
+                "node_results": [],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+        print(f"[ROUTING] Using V3 processor (LangGraph with gRPC retrieval)")
+        result = process_service_v3.process(
+            workflow_id=workflow_id,
+            document_id=document_id,
+            document_type=document_type,
+            query=query,
+            nodes=nodes,
+            edges=edges,
+            start_node=start_node
+        )
+
     else:
         # V1 processor - uses LangGraph workflow, requires nodes/edges
         nodes = message.get("nodes", [])
@@ -218,11 +260,15 @@ def run_consumer(
     print("Initializing V2 process service (create_agent)...")
     process_service_v2 = get_process_service_v2(vector_store)
 
+    print("Initializing V3 process service (gRPC retrieval)...")
+    process_service_v3 = get_process_service_v3()
+
     print(f"\nConsumer started")
     print(f"  Bootstrap servers: {bootstrap_servers}")
     print(f"  Listening on: {topic}")
     print(f"  Responding to: {response_topic}")
-    print(f"  Supported processor types: v1 (default), v2")
+    print(f"  Supported processor types: v1 (default), v2, v3")
+    print(f"  V3 requires gRPC retrieval server on localhost:50051")
     print(f"\nWaiting for workflow events... (Press Ctrl+C to stop)\n")
 
     running = True
@@ -252,7 +298,8 @@ def run_consumer(
                     response = process_workflow_message(
                         record.value,
                         process_service,
-                        process_service_v2
+                        process_service_v2,
+                        process_service_v3
                     )
 
                     # Send response to response topic

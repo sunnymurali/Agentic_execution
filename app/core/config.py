@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 @dataclass
 class AzureConfig:
-    api_key: str = os.getenv("AZURE_OPENAI_API_KEY", "your-api-key-here")
-    endpoint: str = os.getenv("AZURE_OPENAI_ENDPOINT", "https://your-endpoint.openai.azure.com/")
+    api_key: str = os.getenv("AZURE_OPENAI_API_KEY", "")
+    endpoint: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     api_version: str = "2025-01-01-preview"
     embedding_model: str = "text-embedding-3-large"
     llm_model: str = "gpt-4.1"

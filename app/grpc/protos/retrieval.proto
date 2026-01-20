@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package retrieval;
+
+// Retrieval Service - Vector search for documents
+service RetrievalService {
+  // Single query search
+  rpc Search(SearchRequest) returns (SearchResponse);
+
+  // Multi-query search (for query decomposition patterns)
+  rpc MultiSearch(MultiSearchRequest) returns (SearchResponse);
+
+  // Health check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Single search request
+message SearchRequest {
+  string query = 1;
+  string document_id = 2;
+  string document_type = 3;
+  int32 k = 4;  // Number of results to return
+}
+
+// Multi-query search request
+message MultiSearchRequest {
+  repeated string queries = 1;
+  string document_id = 2;
+  string document_type = 3;
+  int32 k_per_query = 4;  // Results per query
+  bool deduplicate = 5;   // Remove duplicate chunks
+}
+
+// Search response (used by both Search and MultiSearch)
+message SearchResponse {
+  repeated Chunk chunks = 1;
+  int32 total_chunks = 2;
+  string status = 3;  // "success" or "error"
+  string message = 4; // Error message if status is "error"
+}
+
+// A single chunk from the vector store
+message Chunk {
+  string content = 1;
+  float score = 2;
+  map<string, string> metadata = 3;
+  string query = 4;  // The query that retrieved this chunk (for multi-search)
+}
+
+// Health check
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;  // "healthy" or "unhealthy"
+  string vector_store = 2;  // Vector store connection status
+}

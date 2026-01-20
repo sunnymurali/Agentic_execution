@@ -34,6 +34,12 @@ class NodeConfig(BaseModel):
     system_prompt: Optional[str] = None
     output_format: Optional[Dict[str, Any]] = None  # JSON schema for structured output
 
+    # Retriever node specific config
+    use_as_tool: Optional[bool] = False  # Use LLM-driven tool-based retrieval
+    k_per_query: Optional[int] = 10  # Number of chunks per search query
+    max_tool_iterations: Optional[int] = 5  # Max tool call iterations for retriever
+    deduplicate: Optional[bool] = True  # Deduplicate chunks across queries
+
 
 class Node(BaseModel):
     """A node in the workflow graph"""
@@ -118,4 +124,38 @@ class ProcessResponseV2(BaseModel):
     status: str  # "success", "error", "no_response"
     message: str
     final_output: Optional[Dict[str, Any]] = None  # Contains response and tool_calls
+    timestamp: str
+
+
+# ==================== Process V3 (LangGraph with gRPC Retrieval) ====================
+
+class ProcessRequestV3(BaseModel):
+    """
+    Request to process a document using V3 (LangGraph with gRPC retrieval).
+
+    Same structure as V1 (nodes, edges, start_node) but uses gRPC for
+    all retrieval operations instead of embedded vector store.
+    """
+    workflow_id: str
+    document_id: str
+    document_type: str  # e.g., "earnings", "prospectus", "10k", "10q"
+    query: str  # The user query/instruction to process
+    nodes: List[Node]
+    edges: List[Edge]
+    start_node: str
+
+    # gRPC retrieval service configuration
+    retrieval_host: Optional[str] = "localhost"  # gRPC retrieval service host
+    retrieval_port: Optional[int] = 50051  # gRPC retrieval service port
+
+
+class ProcessResponseV3(BaseModel):
+    """Response from V3 workflow processing (LangGraph with gRPC retrieval)"""
+    workflow_id: str
+    document_id: str
+    status: str  # "completed", "failed", "partial"
+    message: str
+    final_output: Optional[Dict[str, Any]] = None  # Last agent's structured output
+    node_results: List[NodeResult]
+    retrieval_mode: Optional[str] = "grpc"  # Always "grpc" for V3
     timestamp: str

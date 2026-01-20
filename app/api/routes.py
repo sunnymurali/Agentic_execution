@@ -14,12 +14,16 @@ from app.models.schemas import (
     # V2 schemas
     ProcessRequestV2,
     ProcessResponseV2,
+    # V3 schemas (gRPC retrieval)
+    ProcessRequestV3,
+    ProcessResponseV3,
 )
 from app.services.interfaces import IVectorStore, IIngestService, IProcessService
 from app.services.vector_store_service import QdrantVectorStoreService
 from app.services.ingest_service import IngestService
 from app.services.process_service import ProcessService
 from app.services.process_service_v2 import ProcessServiceV2
+from app.services.process_service_v3 import ProcessServiceV3
 from app.core.vector_store import (
     get_qdrant_client,
     get_embeddings,
@@ -58,6 +62,17 @@ def get_process_service_v2() -> ProcessServiceV2:
     """Factory for V2 process service (LangChain 1.x create_agent)"""
     vector_store = get_vector_store()
     return ProcessServiceV2(vector_store)
+
+
+def get_process_service_v3(
+    retrieval_host: str = "localhost",
+    retrieval_port: int = 50051
+) -> ProcessServiceV3:
+    """Factory for V3 process service (gRPC retrieval)"""
+    return ProcessServiceV3(
+        retrieval_host=retrieval_host,
+        retrieval_port=retrieval_port
+    )
 
 
 # ==================== Endpoints ====================
@@ -203,6 +218,75 @@ async def process_document_v2(request: ProcessRequestV2):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Process V2 failed: {str(e)}")
+
+
+@router.post("/process_v3", response_model=ProcessResponseV3)
+async def process_document_v3(request: ProcessRequestV3):
+    """
+    Process a document using V3 (LangGraph with gRPC retrieval).
+
+    Same workflow structure as V1 (nodes, edges) but uses gRPC for retrieval:
+    - Builds a LangGraph workflow from nodes and edges
+    - All retrieval calls go through gRPC to a separate retrieval service
+    - Enables independent scaling of retrieval and processing
+
+    Requirements:
+    - gRPC retrieval server must be running (default: localhost:50051)
+    - Start the server with: python -m app.grpc.retrieval_server
+
+    The workflow will:
+    1. Build LangGraph workflow from nodes and edges
+    2. Execute nodes using gRPC retrieval service for document search
+    3. Return status for each node execution with structured output
+    """
+    try:
+        process_service = get_process_service_v3(
+            retrieval_host=request.retrieval_host,
+            retrieval_port=request.retrieval_port
+        )
+
+        # Convert Pydantic models to dicts for the service
+        nodes_dict = [node.model_dump() for node in request.nodes]
+        edges_dict = [edge.model_dump() for edge in request.edges]
+
+        result = process_service.process(
+            workflow_id=request.workflow_id,
+            document_id=request.document_id,
+            document_type=request.document_type,
+            query=request.query,
+            nodes=nodes_dict,
+            edges=edges_dict,
+            start_node=request.start_node
+        )
+
+        node_results = [
+            NodeResult(
+                node_id=nr["node_id"],
+                node_name=nr["node_name"],
+                status=nr["status"],
+                output=nr.get("output"),
+                error=nr.get("error")
+            )
+            for nr in result.get("node_results", [])
+        ]
+
+        return ProcessResponseV3(
+            workflow_id=result["workflow_id"],
+            document_id=result["document_id"],
+            status=result["status"],
+            message=result["message"],
+            final_output=result.get("final_output"),
+            node_results=node_results,
+            retrieval_mode=result.get("retrieval_mode", "grpc"),
+            timestamp=datetime.now(timezone.utc).isoformat()
+        )
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Process V3 failed: {str(e)}")
 
 
 @router.get("/health")
