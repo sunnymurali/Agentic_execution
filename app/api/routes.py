@@ -64,15 +64,10 @@ def get_process_service_v2() -> ProcessServiceV2:
     return ProcessServiceV2(vector_store)
 
 
-def get_process_service_v3(
-    retrieval_host: str = "localhost",
-    retrieval_port: int = 50051
-) -> ProcessServiceV3:
-    """Factory for V3 process service (gRPC retrieval)"""
-    return ProcessServiceV3(
-        retrieval_host=retrieval_host,
-        retrieval_port=retrieval_port
-    )
+def get_process_service_v3() -> ProcessServiceV3:
+    """Factory for V3 process service (vector search as node)"""
+    vector_store = get_vector_store()
+    return ProcessServiceV3(vector_store)
 
 
 # ==================== Endpoints ====================
@@ -240,10 +235,7 @@ async def process_document_v3(request: ProcessRequestV3):
     3. Return status for each node execution with structured output
     """
     try:
-        process_service = get_process_service_v3(
-            retrieval_host=request.retrieval_host,
-            retrieval_port=request.retrieval_port
-        )
+        process_service = get_process_service_v3()
 
         # Convert Pydantic models to dicts for the service
         nodes_dict = [node.model_dump() for node in request.nodes]

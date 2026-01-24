@@ -2,6 +2,9 @@
 Kafka Consumer - Processes workflow events and responds with results
 """
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file before importing config
+
 import json
 import signal
 import sys
@@ -84,15 +87,9 @@ def get_process_service_v2(vector_store: QdrantVectorStoreService) -> ProcessSer
     return ProcessServiceV2(vector_store)
 
 
-def get_process_service_v3(
-    retrieval_host: str = "localhost",
-    retrieval_port: int = 50051
-) -> ProcessServiceV3:
-    """Initialize the V3 process service (gRPC retrieval)"""
-    return ProcessServiceV3(
-        retrieval_host=retrieval_host,
-        retrieval_port=retrieval_port
-    )
+def get_process_service_v3(vector_store: QdrantVectorStoreService) -> ProcessServiceV3:
+    """Initialize the V3 process service (vector search as node)"""
+    return ProcessServiceV3(vector_store)
 
 
 def process_workflow_message(
@@ -260,15 +257,14 @@ def run_consumer(
     print("Initializing V2 process service (create_agent)...")
     process_service_v2 = get_process_service_v2(vector_store)
 
-    print("Initializing V3 process service (gRPC retrieval)...")
-    process_service_v3 = get_process_service_v3()
+    print("Initializing V3 process service (vector search as node)...")
+    process_service_v3 = get_process_service_v3(vector_store)
 
     print(f"\nConsumer started")
     print(f"  Bootstrap servers: {bootstrap_servers}")
     print(f"  Listening on: {topic}")
     print(f"  Responding to: {response_topic}")
     print(f"  Supported processor types: v1 (default), v2, v3")
-    print(f"  V3 requires gRPC retrieval server on localhost:50051")
     print(f"\nWaiting for workflow events... (Press Ctrl+C to stop)\n")
 
     running = True

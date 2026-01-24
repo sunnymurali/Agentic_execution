@@ -144,10 +144,6 @@ class ProcessRequestV3(BaseModel):
     edges: List[Edge]
     start_node: str
 
-    # gRPC retrieval service configuration
-    retrieval_host: Optional[str] = "localhost"  # gRPC retrieval service host
-    retrieval_port: Optional[int] = 50051  # gRPC retrieval service port
-
 
 class ProcessResponseV3(BaseModel):
     """Response from V3 workflow processing (LangGraph with gRPC retrieval)"""

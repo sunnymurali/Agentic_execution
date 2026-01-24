@@ -2,6 +2,9 @@
 Execution Service - FastAPI Entry Point
 """
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file before importing config
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn

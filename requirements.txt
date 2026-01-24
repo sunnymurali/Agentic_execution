@@ -25,6 +25,9 @@ qdrant-client>=1.9.0
 # Azure OpenAI
 openai>=1.0.0
 
+# Environment
+python-dotenv>=1.0.0
+
 # gRPC (for V3 retrieval service)
 grpcio>=1.60.0
 grpcio-tools>=1.60.0

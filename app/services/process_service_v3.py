@@ -1,50 +1,37 @@
 """
-Process Service V3 - Uses LangGraph with gRPC for retrieval
+Process Service V3 - Uses LangGraph with Vector Search as a Node
 
-This service uses LangGraph workflows (like V1) but decouples retrieval
-by calling a gRPC retrieval service instead of using embedded vector store.
+This service uses LangGraph workflows where vector search is a first-class
+node in the graph. Vector search is performed directly against the vector store.
 """
 
 from typing import Dict, List, Any
 from datetime import datetime, timezone
 
 from app.services.workflow_builder_v3 import build_workflow_v3, execute_workflow_v3
-from app.grpc.retrieval_client import get_retrieval_client
+from app.services.interfaces import IVectorStore
 
 
 class ProcessServiceV3:
     """
-    Process service that uses LangGraph with gRPC retrieval.
+    Process service that uses LangGraph with vector search as a node.
 
-    Same workflow structure as V1 (nodes, edges) but uses gRPC
-    for all vector search operations instead of embedded vector store.
+    Node types available:
+    - input: Initialize workflow state
+    - vector_search: Perform vector search directly against vector store
+    - agent: LLM processing using context from state
+    - agent_with_tools: LLM with vector search as a callable tool
     """
 
-    def __init__(
-        self,
-        retrieval_host: str = "localhost",
-        retrieval_port: int = 50051
-    ):
+    def __init__(self, vector_store: IVectorStore):
         """
         Initialize the V3 process service.
 
         Args:
-            retrieval_host: gRPC retrieval service host
-            retrieval_port: gRPC retrieval service port
+            vector_store: Vector store for document retrieval
         """
-        self.retrieval_host = retrieval_host
-        self.retrieval_port = retrieval_port
-        self.retrieval_client = None
-        print(f"[ProcessServiceV3] Initialized with gRPC retrieval at {retrieval_host}:{retrieval_port}")
-
-    def _get_retrieval_client(self):
-        """Get or create retrieval client"""
-        if self.retrieval_client is None:
-            self.retrieval_client = get_retrieval_client(
-                host=self.retrieval_host,
-                port=self.retrieval_port
-            )
-        return self.retrieval_client
+        self.vector_store = vector_store
+        print(f"[ProcessServiceV3] Initialized with direct vector store access")
 
     def process(
         self,
@@ -57,7 +44,7 @@ class ProcessServiceV3:
         start_node: str
     ) -> Dict[str, Any]:
         """
-        Process document using LangGraph workflow with gRPC retrieval.
+        Process document using LangGraph workflow.
 
         Args:
             workflow_id: Workflow identifier
@@ -72,7 +59,7 @@ class ProcessServiceV3:
             Dict with processing results including final_output and node_results
         """
         print(f"\n{'='*60}")
-        print(f"[ProcessServiceV3] === PROCESS SERVICE V3 (gRPC) ===")
+        print(f"[ProcessServiceV3] === PROCESS SERVICE V3 ===")
         print(f"[ProcessServiceV3] Workflow ID: {workflow_id}")
         print(f"[ProcessServiceV3] Document ID: {document_id}")
         print(f"[ProcessServiceV3] Document Type: {document_type}")
@@ -80,19 +67,15 @@ class ProcessServiceV3:
         print(f"[ProcessServiceV3] Nodes: {len(nodes)}")
         print(f"[ProcessServiceV3] Edges: {len(edges)}")
         print(f"[ProcessServiceV3] Start Node: {start_node}")
-        print(f"[ProcessServiceV3] Retrieval via gRPC: {self.retrieval_host}:{self.retrieval_port}")
         print(f"{'='*60}\n")
 
         try:
-            # Get retrieval client
-            retrieval_client = self._get_retrieval_client()
-
-            # Build the workflow from definitions using gRPC retrieval
-            print("[ProcessServiceV3] Building LangGraph workflow with gRPC retrieval...")
+            # Build the workflow from definitions
+            print("[ProcessServiceV3] Building LangGraph workflow...")
             workflow = build_workflow_v3(
                 nodes=nodes,
                 edges=edges,
-                retrieval_client=retrieval_client
+                vector_store=self.vector_store
             )
 
             # Execute the workflow
@@ -111,7 +94,7 @@ class ProcessServiceV3:
             # Determine overall status
             has_errors = any(nr.get("status") == "error" for nr in node_results)
             status = "failed" if has_errors else "completed"
-            message = "Workflow completed with errors" if has_errors else "Workflow executed successfully via gRPC retrieval"
+            message = "Workflow completed with errors" if has_errors else "Workflow executed successfully"
 
             print(f"[ProcessServiceV3] Workflow {status}: {len(node_results)} nodes executed")
 
@@ -122,7 +105,6 @@ class ProcessServiceV3:
                 "message": message,
                 "final_output": final_output,
                 "node_results": node_results,
-                "retrieval_mode": "grpc",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
@@ -138,6 +120,5 @@ class ProcessServiceV3:
                 "message": f"Workflow execution failed: {str(e)}",
                 "final_output": None,
                 "node_results": [],
-                "retrieval_mode": "grpc",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
